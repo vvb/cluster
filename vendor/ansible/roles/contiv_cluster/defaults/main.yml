@@ -1,9 +1,13 @@
 ---
 # role variable for the cluster manager service
 
-collins_image: contiv/collins:02_25_2016
+collins_image: contiv/collins
+collins_image_version: "02_25_2016"
 collins_host_port: 9000
 collins_guest_port: 9000
+
+clusterm_args_file: "clusterm.args"
+clusterm_conf_file: "clusterm.conf"
 
 contiv_cluster_version: "v0.0.0-03-08-2016.00-06-26.UTC"
 contiv_cluster_tar_file: "cluster-{{ contiv_cluster_version }}.tar.bz2"
