@@ -1,10 +1,7 @@
 ---
 - include: ./checks/check_system.yml
 
-- include: ./checks/check_mandatory_vars.yml
-
-- include: ./misc/system_tuning.yml
-  when: osd_group_name in group_names
+- include: ./checks/check_mandatory_common_vars.yml
 
 - include: ./pre_requisites/prerequisite_ice.yml
   when: ceph_stable_ice

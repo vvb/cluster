@@ -1,4 +1,8 @@
 ---
+- include: ./checks/check_mandatory_osd_vars.yml
+
+- include: ./misc/system_tuning.yml
+  when: osd_group_name in group_names
 
 - include: pre_requisite.yml
   when: not osd_containerized_deployment

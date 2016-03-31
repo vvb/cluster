@@ -6,10 +6,12 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/contiv/errored"
 )
 
 var httpErrorResp = func(rsrc, status string, body []byte) error {
-	return fmt.Errorf("Request: %s Response status: %q. Response body: %s", rsrc, status, body)
+	return errored.Errorf("Request: %s Response status: %q. Response body: %s", rsrc, status, body)
 }
 
 // Client provides the methods for issuing post and get requests to cluster manager
@@ -89,6 +91,11 @@ func (c *Client) PostNodeDecommission(nodeName, extraVars string) error {
 // PostNodeInMaintenance posts the request to put a node in-maintenance
 func (c *Client) PostNodeInMaintenance(nodeName, extraVars string) error {
 	return c.doPost(fmt.Sprintf("%s/%s", PostNodeMaintenancePrefix, nodeName), extraVars)
+}
+
+// PostNodeDiscover posts the request to provision a node for discovery
+func (c *Client) PostNodeDiscover(nodeAddr, extraVars string) error {
+	return c.doPost(fmt.Sprintf("%s/%s", PostNodeDiscoverPrefix, nodeAddr), extraVars)
 }
 
 // PostGlobals posts the request to set global extra vars

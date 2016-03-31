@@ -88,13 +88,21 @@
   debug paxos = {{ debug_mon_level }}
   debug auth = {{ debug_mon_level }}
 {% endif %}
-{% for host in groups[mon_group_name] %}
-  {% if hostvars[host]['ansible_hostname'] is defined %}
-  [mon.{{ hostvars[host]['ansible_hostname'] }}]
-    host = {{ hostvars[host]['ansible_hostname'] }}
-    mon addr = {{ hostvars[host]['ansible_' + (hostvars[host]['monitor_interface'] if hostvars[host]['monitor_interface'] is defined else monitor_interface) ]['ipv4']['address'] }}
-  {% endif %}
-{% endfor %}
+{% if groups[mon_group_name] is defined %}
+  {% for host in groups[mon_group_name] %}
+    {% if hostvars[host]['ansible_hostname'] is defined %}
+    [mon.{{ hostvars[host]['ansible_hostname'] }}]
+      host = {{ hostvars[host]['ansible_hostname'] }}
+      mon addr = {{ hostvars[host]['ansible_' + (hostvars[host]['monitor_interface'] if hostvars[host]['monitor_interface'] is defined else monitor_interface) ]['ipv4']['address'] }}
+    {% endif %}
+  {% endfor %}
+{% else %}
+  {% for host in masters %}
+    [mon.{{ host["hostname"] }}]
+      host = {{ host["hostname"] }}
+      mon addr = {{ host["address"] }}
+  {% endfor %}
+{% endif %}
 
 [osd]
   osd mkfs type = {{ osd_mkfs_type }}
