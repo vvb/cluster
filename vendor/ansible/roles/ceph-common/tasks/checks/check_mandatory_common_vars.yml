@@ -1,0 +1,45 @@
+---
+- name: make sure an installation origin was chosen
+  fail:
+    msg: "choose an installation origin"
+  when:
+    ceph_origin != 'upstream' and
+    ceph_origin != 'distro'
+
+- name: make sure an installation source was chosen
+  fail:
+    msg: "choose an upstream installation source or read https://github.com/ceph/ceph-ansible/wiki"
+  when:
+    ceph_origin == 'upstream' and
+    not ceph_stable and
+    not ceph_dev and
+    not ceph_stable_ice and
+    not ceph_stable_rh_storage
+
+- name: verify that a method was chosen for red hat storage
+  fail:
+    msg: "choose between ceph_stable_rh_storage_cdn_install and ceph_stable_rh_storage_iso_install"
+  when:
+    ceph_stable_rh_storage and
+    not ceph_stable_rh_storage_cdn_install and
+    not ceph_stable_rh_storage_iso_install
+
+- name: make sure journal_size configured
+  fail:
+    msg: "journal_size must be configured. See http://ceph.com/docs/master/rados/configuration/osd-config-ref/"
+  when: journal_size|int == 0
+
+- name: make sure monitor_interface configured
+  fail:
+    msg: "monitor_interface must be configured. Interface for the monitor to listen on"
+  when: monitor_interface == 'interface'
+
+- name: make sure cluster_network configured
+  fail:
+    msg: "cluster_network must be configured. Ceph replication network"
+  when: cluster_network == '0.0.0.0/0'
+
+- name: make sure public_network configured
+  fail:
+    msg: "public_network must be configured. Ceph public network"
+  when: public_network == '0.0.0.0/0'
