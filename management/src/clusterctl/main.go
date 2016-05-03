@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"text/tabwriter"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
@@ -396,19 +397,21 @@ func printNodesStatus(data []byte, fields string) {
 	var format []string
 	var args []interface{}
 	for _, each := range hdrs {
-		if each == "Name" {
-			format = append(format, "%-35s")
-		} else {
-			format = append(format, "%-20s")
-		}
+		format = append(format, "%s")
 		args = append(args, each)
 	}
 
-	var outBuf bytes.Buffer
-	outBuf.WriteString(fmt.Sprintf(strings.Join(format, "|"), args...))
-	outBuf.WriteString("\r\n")
-	outBuf.WriteString("-------------------------------------------------------------------------------------------------------------------------------")
-	outBuf.WriteString("\r\n")
+	writer := tabwriter.NewWriter(os.Stdout, 0, 8, 8, ' ', 0)
+
+	writer.Write([]byte(fmt.Sprintf(strings.Join(format, "|"), args...)))
+	writer.Write([]byte("\r\n"))
+	writer.Write([]byte("-------------------------------------------------------------------------------------------------------------------------------"))
+	writer.Write([]byte("\r\n"))
+	//var outBuf bytes.Buffer
+	//outBuf.WriteString(fmt.Sprintf(strings.Join(format, "|"), args...))
+	//outBuf.WriteString("\r\n")
+	//outBuf.WriteString("-------------------------------------------------------------------------------------------------------------------------------")
+	//outBuf.WriteString("\r\n")
 
 	jq := getJSONDecoderObj(data)
 
@@ -419,9 +422,12 @@ func printNodesStatus(data []byte, fields string) {
 		monObj, _ := jq.Object("monitoring-state")
 
 		d := extractDisplayVars(hdrs, invObj, cfgObj, monObj)
-		outBuf.WriteString(fmt.Sprintf(strings.Join(format, "|"), d...))
-		outBuf.WriteString("\r\n")
-		outBuf.WriteTo(os.Stdout)
+		//outBuf.WriteString(fmt.Sprintf(strings.Join(format, "|"), d...))
+		//outBuf.WriteString("\r\n")
+		//outBuf.WriteTo(os.Stdout)
+		writer.Write([]byte(fmt.Sprintf(strings.Join(format, "|"), d...)))
+		writer.Write([]byte("\r\n"))
+		writer.Flush()
 		return
 	}
 
@@ -430,11 +436,14 @@ func printNodesStatus(data []byte, fields string) {
 		cfgObj, _ := jq.Object(s, "configuration-state")
 		monObj, _ := jq.Object(s, "monitoring-state")
 		d := extractDisplayVars(hdrs, invObj, cfgObj, monObj)
-		outBuf.WriteString(fmt.Sprintf(strings.Join(format, "|"), d...))
-		outBuf.WriteString("\r\n")
+		//outBuf.WriteString(fmt.Sprintf(strings.Join(format, "|"), d...))
+		//outBuf.WriteString("\r\n")
+		writer.Write([]byte(fmt.Sprintf(strings.Join(format, "|"), d...)))
+		writer.Write([]byte("\r\n"))
 	}
 
-	outBuf.WriteTo(os.Stdout)
+	writer.Flush()
+	//outBuf.WriteTo(os.Stdout)
 	return
 }
 
