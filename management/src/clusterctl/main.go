@@ -3,13 +3,16 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net"
 	"os"
+	"strings"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
 	"github.com/contiv/cluster/management/src/clusterm/manager"
 	"github.com/contiv/errored"
+	"github.com/jmoiron/jsonq"
 )
 
 var (
@@ -26,6 +29,14 @@ var (
 			Name:  "extra-vars, e",
 			Value: "",
 			Usage: "extra vars for ansible configuration. This should be a quoted json string.",
+		},
+	}
+
+	statusFieldsFlags = []cli.Flag{
+		cli.StringFlag{
+			Name:  "fields, f",
+			Value: "",
+			Usage: "Comma separated string of fields to display as part of status. Supported Values: Name, State, Status, PrevStatus, PrevState, InventoryName, HostGroup, SshAddress, Label, SerialNumber, ManagementAddress ",
 		},
 	}
 )
@@ -68,6 +79,13 @@ func main() {
 					Usage:   "get node's status information",
 					Action:  doAction(newGetActioner(nodeGet)),
 				},
+				{
+					Name:    "status",
+					Aliases: []string{"s"},
+					Usage:   "get node's status summary",
+					Action:  doAction(newGetStatusActioner(nodeStatus)),
+					Flags:   statusFieldsFlags,
+				},
 			},
 		},
 		{
@@ -101,6 +119,13 @@ func main() {
 					Aliases: []string{"g"},
 					Usage:   "get status information for all nodes",
 					Action:  doAction(newGetActioner(nodesGet)),
+				},
+				{
+					Name:    "status",
+					Aliases: []string{"s"},
+					Usage:   "get node's status summary",
+					Action:  doAction(newGetStatusActioner(nodesStatus)),
+					Flags:   statusFieldsFlags,
 				},
 			},
 		},
@@ -308,6 +333,142 @@ func nodesGet(c *manager.Client, noop string) error {
 	json.Indent(&outBuf, out, "", "    ")
 	outBuf.WriteTo(os.Stdout)
 	return nil
+}
+
+type getStatusActioner struct {
+	nodeName string
+	fields   string
+	getCb    func(c *manager.Client, nodeName, fields string) error
+}
+
+func newGetStatusActioner(getCb func(c *manager.Client, nodeName, fields string) error) *getStatusActioner {
+	return &getStatusActioner{getCb: getCb}
+}
+
+func (nga *getStatusActioner) procFlags(c *cli.Context) {
+	nga.fields = c.String("fields")
+	return
+}
+
+func (nga *getStatusActioner) procArgs(c *cli.Context) {
+	nga.nodeName = c.Args().First()
+}
+
+func (nga *getStatusActioner) action(c *manager.Client) error {
+	return nga.getCb(c, nga.nodeName, nga.fields)
+}
+
+func nodeStatus(c *manager.Client, nodeName, fields string) error {
+	if nodeName == "" {
+		return errUnexpectedArgCount("1", 0)
+	}
+
+	out, err := c.GetNode(nodeName)
+	if err != nil {
+		return err
+	}
+
+	printNodesStatus(out, fields)
+	return nil
+}
+
+func nodesStatus(c *manager.Client, noop, fields string) error {
+	out, err := c.GetAllNodes()
+	if err != nil {
+		return err
+	}
+	printNodesStatus(out, fields)
+	return nil
+}
+
+func printNodesStatus(data []byte, fields string) {
+	m := make(map[string]interface{})
+	if err := json.Unmarshal(data, &m); err != nil {
+		fmt.Println(err)
+	}
+
+	headers := "Name,State,Status,HostGroup"
+	for _, each := range strings.Split(fields, ",") {
+		headers += "," + strings.Trim(each, " ")
+	}
+	hdrs := strings.Split(headers, ",")
+
+	var format []string
+	var args []interface{}
+	for _, each := range hdrs {
+		if each == "Name" {
+			format = append(format, "%-35s")
+		} else {
+			format = append(format, "%-20s")
+		}
+		args = append(args, each)
+	}
+
+	var outBuf bytes.Buffer
+	outBuf.WriteString(fmt.Sprintf(strings.Join(format, "|"), args...))
+	outBuf.WriteString("\r\n")
+	outBuf.WriteString("-------------------------------------------------------------------------------------------------------------------------------")
+	outBuf.WriteString("\r\n")
+
+	jq := getJSONDecoderObj(data)
+
+	// detect is this is node vs nodes
+	if _, ok := m["inventory-state"]; ok {
+		invObj, _ := jq.Object("inventory-state")
+		cfgObj, _ := jq.Object("configuration-state")
+		monObj, _ := jq.Object("monitoring-state")
+
+		d := extractDisplayVars(hdrs, invObj, cfgObj, monObj)
+		outBuf.WriteString(fmt.Sprintf(strings.Join(format, "|"), d...))
+		outBuf.WriteString("\r\n")
+		outBuf.WriteTo(os.Stdout)
+		return
+	}
+
+	for s := range m {
+		invObj, _ := jq.Object(s, "inventory-state")
+		cfgObj, _ := jq.Object(s, "configuration-state")
+		monObj, _ := jq.Object(s, "monitoring-state")
+		d := extractDisplayVars(hdrs, invObj, cfgObj, monObj)
+		outBuf.WriteString(fmt.Sprintf(strings.Join(format, "|"), d...))
+		outBuf.WriteString("\r\n")
+	}
+
+	outBuf.WriteTo(os.Stdout)
+	return
+}
+
+func extractDisplayVars(fields []string, invObj, cfgObj, monObj map[string]interface{}) []interface{} {
+	d := map[string]string{
+		"Name":       invObj["name"].(string),
+		"State":      invObj["state"].(string),
+		"Status":     invObj["status"].(string),
+		"PrevStatus": invObj["prev-status"].(string),
+		"PrevState":  invObj["prev-state"].(string),
+
+		"InventoryName": cfgObj["inventory-name"].(string),
+		"HostGroup":     cfgObj["host-group"].(string),
+		"SshAddress":    cfgObj["ssh-address"].(string),
+
+		"Label":             monObj["label"].(string),
+		"SerialNumber":      monObj["serial-number"].(string),
+		"ManagementAddress": monObj["management-address"].(string),
+	}
+
+	var displayVars []interface{}
+	for _, each := range fields {
+		displayVars = append(displayVars, d[each])
+	}
+
+	return displayVars
+}
+
+func getJSONDecoderObj(data []byte) *jsonq.JsonQuery {
+	m := map[string]interface{}{}
+	dec := json.NewDecoder(strings.NewReader(string(data)))
+	dec.Decode(&m)
+	jq := jsonq.NewQuery(m)
+	return jq
 }
 
 func globalsGet(c *manager.Client, noop string) error {
